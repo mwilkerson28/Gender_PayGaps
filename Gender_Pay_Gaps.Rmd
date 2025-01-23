@@ -1,0 +1,403 @@
+---
+title: 'Data Exploration Project: Final Presentation'
+author: "McKayden J. Wilkerson"
+date: "2024-12-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(dplyr)
+library(Lock5Data)
+library(stringr)
+library(ggplot2)
+library(sf)
+library(maps)
+library(usmap)
+```
+
+## Overview:
+
+This project focuses on the salary gap between men and women. The selected data set presents the multiple variables, and includes data from all over the world within different jobs.The data emphasizes the United States pay rates, divides the cases into different regions, and compares the salary per region. From there it breaks the data down into different job groupings and compares the regional salary to the occupation, by gender. The variable of experience, shifts the project to focus on: regions in the United States, salary for specific jobs, experience in each job, and the gender of each person.
+
+```{r, include=FALSE}
+survey <- read.csv("survey copy.csv")
+```
+
+## Filtering and Cleaning My Data:
+
+### In General:
+
+An analysis of careers in US Computer Science, Education, Healthcare, Government, and Accounting was conducted. All other career fields in this survey were filtered out, as well as the columns that were irrelevant to the study: such as “Timestamps.” In order to filter out additional information, the data table was converted to lowercase letters. This is because the computer is case sensitive and otherwise won’t recognize that Usa is the same as usa, for example.
+
+```{r, include=FALSE}
+main_survey <- survey%>%
+  select(Industry, Annual.salary, Currency, Country, State, City, Highest.level.of.education.completed, Gender)
+
+survey_low <- main_survey%>%
+  mutate(Country=str_to_lower(Country))
+
+my_data <-survey_low%>%
+  filter(Industry%in%c("Computing or Tech", "Education (Higher Education)", "Education (Primary/Secondary)", "Health care", "Public health", "Government and Public Administration", "Accounting, Banking & Finance"))
+```
+
+The next factors that were filtered out were the careers with the currency set to "USA," since there were so many different ways that people could type in “USA” under the country category. Some people who were paid in US dollars resided in foreign countries. These people were excluded, because this study only analyzes the people that reside within the United States. Then the data was filtered for “currency is USD and country is the united states”, but as expected, there were multiple ways that people could respond to the survey. Finally, the data was filtered and searched for foreign currency enteries but were located within the USA. Eleven responses were discovered to be making foreign currency while living in the United States, and combined into the original data set.
+
+```{r, include=FALSE}
+my_data2 <- my_data%>%
+  filter(Currency=="USD")
+
+USDC_data <- my_data2%>%
+  filter(Currency=="USD")%>%
+  filter(Country%in%c("united states", "usa", "us", "united states of america", "u.s.", "u.s.a.", "unitedstates", "🇺🇸 ", "united state", "isa", "u.s>", "u.s. ", "united states ", "usa ", "united stated", "u.s.a", "united states of america ", "america", "us ", "the united states", "united state of america", "united statws", "u.s", "unites states ", "u.s.a. ", "u. s. ", "united sates", "united states of american ", "uniited states", "united sates of america", "united statea", "united statees", "uniyed states", "uniyes states", "united states of americas", "u. s.", "unites states", "united status", "us of a", "the us" ))
+
+check_1 <- my_data%>%
+  filter(Currency!="USD")%>%
+  filter(Country%in%c("united states", "usa", "us", "united states of america", "u.s.", "u.s.a.", "unitedstates", "🇺🇸 ", "united state", "isa", "u.s>", "u.s. ", "united states ", "usa ", "united stated", "u.s.a", "united states of america ", "america", "us ", "the united states", "united state of america", "united statws", "u.s", "unites states ", "u.s.a. ", "u. s. ", "united sates", "united states of american ", "uniited states", "united sates of america", "united statea", "united statees", "uniyed states", "uniyes states", "united states of americas", "u. s.", "unites states", "united status", "us of a", "the us" ))
+
+AllUSA_Data <- rbind(check_1, USDC_data)
+```
+
+Since this survey was filled out by many different people, the likelihood of human error (such as typos or n/a responses) was high. Each respondent's location had to be verified and checked for human error, which allowed the region variable to be created in further steps.
+
+```{r, include=FALSE}
+blank_states <- AllUSA_Data%>%
+  filter(State=="")
+blank_cities <- AllUSA_Data%>%
+  filter(City=="")
+```
+
+After verifying, it was discovered that each respondent recorded their city, yet 90 people refused to write their state. However, the 90 people who failed to record their state did write down a city (or even state in some cases) which could be utilized. At this point, the data set showed every US resident and their state (excluding those 90 people), and had a region column that corresponded to each state.
+
+```{r, include=FALSE}
+state_to_region <- data.frame(
+     State = c("Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut", "Delaware", "Florida", "Georgia", "Hawaii", "Idaho", "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky", "Louisiana", "Maine", "Maryland", "Massachusetts", "Michigan", "Minnesota", "Mississippi", "Missouri", "Montana", "Nebraska", "Nevada", "New Hampshire", "New Jersey", "New Mexico", "New York", "North Carolina", "North Dakota", "Ohio", "Oklahoma", "Oregon", "Pennsylvania", "Rhode Island", "South Carolina", "South Dakota", "Tennessee", "Texas", "Utah", "Vermont", "Virginia", "Washington", "West Virginia", "Wisconsin", "Wyoming", "District of Columbia"),
+     Region = c("South", "West", "West", "South", "West", "West", "Northeast", "South", "South", "South", "West", "West", "Midwest", "Midwest", "Midwest", "Midwest", "South", "South", "Northeast", "South", "Northeast", "Midwest", "Midwest", "South", "Midwest", "West", "Midwest", "West", "Northeast", "Northeast", "West", "Northeast", "South", "Midwest", "Midwest", "South", "West", "Northeast", "Northeast", "South", "Midwest", "South", "South", "West", "Northeast", "South", "West", "South", "Midwest", "West", "South"))
+```
+
+```{r, include=FALSE}
+USAdata_regions <- AllUSA_Data %>%
+     left_join(state_to_region, by = "State")
+USAstates_blank <-  USAdata_regions%>%
+  filter(is.na(Region))
+nrow(USAstates_blank)
+```
+
+### In Regards to Each Person's:
+
+### Education Level
+
+While examining the education level, the column name was changed to "Education" rather than its original name. It was determined that there were **4650** people who had obtained college degree, **160** people who obtained a High School degree, **3777** who obtained a Masters, **698** with their PhD, **357** who obtained a professional degree, **675** with some college experience. There were, however, **62** NA responces.
+
+```{r, include=FALSE}
+USAdata_fixed <- USAdata_regions%>%
+  rename(Education=Highest.level.of.education.completed)
+
+USAdata_fixed %>%
+  group_by(Education) %>%
+  summarise(count = n())
+
+#This assigned a name to the NA column, rather than leaving it blank.
+USAdata_fixed <- USAdata_fixed %>%
+  mutate(Education = ifelse(Education == "", "No Response", Education))
+```
+
+### Gender
+
+In order to analyze gender, the number of individuals in each category had to be recorded. According to this survey, there were 2160 men, 266 Non-binary people, 7771 women, 121 and other people. There were also 61 NA responses as well. A seperate category was created to combine the 121 other responses, 266 Non-binary responses, and the 61 NA responses. This was mainly because there would not be an accurate representation in each group, since the population counts were so different.
+
+```{r, include=FALSE}
+USAdata_fixed %>%
+  group_by(Gender) %>%
+  summarise(count = n())
+```
+
+```{r, include=FALSE}
+My_finaldataset <- USAdata_fixed %>%
+  mutate(Gender = ifelse(Gender == "Non-binary" | Gender == "", "Other or prefer not to answer", Gender))
+
+My_finaldataset %>%
+  group_by(Gender) %>%
+  summarise(count = n())
+```
+
+After combining the non-male and non-female responses, the data set contained **2160** men, **7771** women, and **448** others in this new category. Since this sample size is not large enough to represent the population as a whole, the proportions can **NOT** be applied unless a larger, unbiased sample is collected by randomization. For this sample, the graphs display the median value to get the results as accurate possible, and are only applicable to this particular survey.
+
+The salary column from the survey was being viewed as a character string by Rstudio. This happened because each number was listed with commas separating the digits (like 10,000 for example.) The commas from each number had to be removed, and the values had to be converted to "numeric" strings for calculation purposes.
+
+```{r, include=FALSE}
+class(My_finaldataset$Annual.salary)
+
+My_finaldataset$Annual.salary <- gsub(",", "", My_finaldataset$Annual.salary)
+My_finaldataset$Annual.salary <- as.numeric(My_finaldataset$Annual.salary)
+
+class(My_finaldataset$Annual.salary)
+```
+
+## Analyzing My Data:
+
+### By Education Level:
+
+First, a new table was created from the existing data frame that grouped each education level and gender. Additionally, it calculated the *median* salary and the count of people in each group. This table showed that there were nine people who left their gender status blank and had obtained their high school diploma, while 3040 women had obtained their masters degree. The median salary for the women who had earned a master's degree was \$79,753, and the median salary for the 9 people with their high school diploma was \$115,000. These numbers are **not** applicable to the entire population. This is because there is bias in the survey results, and a disproportionate number of individuals in each category.
+
+```{r, include=FALSE}
+salary_bydegree <- My_finaldataset %>%
+  group_by(Education, Gender) %>%
+  summarise(Median_Salary = median(Annual.salary, na.rm = TRUE),
+            Count = n())
+```
+
+#### Bar Chart of the Median Salary By Education Level and Gender
+
+```{r, echo=FALSE}
+ggplot(salary_bydegree, aes(x = factor(Education, levels = c("PhD","Professional degree","Master's degree", "College degree","Some college", "High School")), y = Median_Salary, fill = Gender)) +
+geom_bar(stat = "identity", position = "dodge") +
+labs(x = "Degree",
+y = "Median Salary") +
+theme_minimal() +
+geom_text(aes(label = Count), position = position_dodge(width = 0.9), vjust = -0) +
+  scale_y_continuous(labels = scales::comma)+
+  coord_flip()+
+   theme(legend.position = "bottom")
+```
+
+Based on the survey results, women are making less than the other categories. It also appears that the salary and education level have a positive correlation for the women. However, as mentioned, the results are not entirely accurate since there were more women than men represented in this survey. This is also noted for the “other” category with their high school diploma, since there were only nine individuals analyzed. It appears that they have the highest salary, but it is misleading since their sample size was signifigantly smaller than the other two categories. From the data gathered, a trend can be observed that as salary level increases, education level does as well.
+
+#### Bar Chart Showing the Median Salary by Education, Gender, and Region:
+
+The next step was to analyze the median salary per gender and education level, and display how different the medians were within each region. A new data frame was created to group individuals by gender, education level, and region, and display a count of how many people were in each category.
+
+```{r, echo=FALSE}
+Gen_Ed_Reg <- My_finaldataset%>%
+  group_by(Gender, Education, Region)%>%
+  summarise(Median_Salary=median(Annual.salary, na.rm=TRUE),
+  Count=n())
+
+ggplot(Gen_Ed_Reg, aes(x = factor(Education, levels = c("PhD","Professional degree","Master's degree", "College degree","Some college", "High School")), y = Median_Salary, fill = Gender)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(x = "Education",
+       y = "Median Salary") +
+  facet_wrap(~Region)+
+  theme_minimal() +
+   theme(axis.text.x = element_text(size = 5))+
+  coord_flip()+
+  scale_y_continuous(labels = scales::comma)+
+   theme(legend.position = "bottom")
+```
+
+These bar charts show the median salary for each gender and their region, based on education level. The data is a bit misleading though, because there is not an accurate proportion of people in each group. A larger and more accurate sample is required for further analysis, but these graphs do indicate that it is possible that the median salary is overall the largest in the West region.
+
+#### Box Plot Showing Salary Distribution By Education Level:
+
+```{r, echo=FALSE}
+ggplot(My_finaldataset, aes(x = factor(Education, levels = c("High School","Some college", "College degree","Master's degree", "Professional degree", "PhD")), y = Annual.salary)) +
+  geom_boxplot() +
+  labs(x = "Education Level",
+       y = "Salary") +
+  theme_minimal() +
+  scale_y_continuous(labels = scales::comma)+
+  coord_flip()
+```
+
+This group of box plots show the salary distributions earned in each career industry and the outlying values, according to the results of this survey. It shows that the people who did not give their education level are making the most money, with PhD being second most. However, I did notice that there are extreme outiers in the NA response group, which impacts these results.
+
+#### Box Plots Showing Salary by Gender and Education Level
+
+```{r, echo=FALSE}
+ggplot(My_finaldataset, aes(x = factor(Education, levels = c("High School","Some college", "College degree","Master's degree", "Professional degree", "PhD")), y = Annual.salary, fill = Gender)) +
+  geom_boxplot() +
+  labs(x = "Education Level",
+       y = "Salary") +
+  theme_minimal() +
+  scale_y_continuous(labels = scales::comma) +
+  scale_fill_brewer(palette = "Set3")+
+  coord_flip()+
+   theme(legend.position = "bottom")
+```
+
+These box plots add on to the Salary by Education Level plots, by factoring in each gender.
+
+### Regionally:
+
+The first table calculated which gender was making the most money in each region. It analyzed the median salary per gender based on which region they listed, and displayed the count of each person in thrir respected category.
+
+```{r, include=FALSE}
+salary_byregion <- My_finaldataset %>%
+  group_by(Region, Gender) %>%
+  summarise(Median_Salary = median(Annual.salary, na.rm = TRUE),
+            Count=n())
+```
+
+#### Bar Chart Showing the Median Salary by Region and Gender
+
+```{r, echo=FALSE}
+ggplot(salary_byregion, aes(x = Region, y = Median_Salary, fill = Gender)) +
+geom_bar(stat = "identity", position = "dodge") +
+labs(x = "Region",
+y = "Median Salary") +
+theme_minimal() +
+geom_text(aes(label = Count), position = position_dodge(width = 0.9), vjust = -0) +
+scale_y_continuous(labels = scales::comma)+
+  coord_flip()+
+ theme(legend.position = "bottom")
+```
+
+The graph shows which region makes the most money overall and each person’s gender. These population counts vary significantly, ranging from 9 to 2042 people, which impacts the results.
+
+#### Box Plots Showing the Salary Distribution by Region
+
+```{r, echo=FALSE}
+ggplot(My_finaldataset, aes(x = Region, y = Annual.salary, fill=Region)) +
+  geom_boxplot() +
+  labs(x = "Region",
+       y = "Salary") +
+  theme_minimal() +
+  scale_y_continuous(labels = scales::comma)+
+  coord_flip()+
+   theme(legend.position = "none")
+```
+
+These box plots show the salary distribution for each region, as well as the outlying salaries. Several outliers are represented in the data set.
+
+#### Box Plots Showing Salary Distribution by Gender and Region
+
+```{r, echo=FALSE}
+ggplot(My_finaldataset, aes(x = Gender, y = Annual.salary, fill = Region)) +
+  geom_boxplot() +
+  labs(x = "Gender",
+       y = "Salary") +
+  theme_minimal() +
+  scale_y_continuous(labels = scales::comma) +
+  scale_fill_brewer(palette = "Set3")+
+  coord_flip()+
+   theme(legend.position = "bottom")
+
+```
+
+These plots show the salary distribution for each gender, in their specific region.
+
+### By Industry:
+
+To analyze the salary distribution by job, a table was created to categorize the individuals, by career.
+
+```{r, include=FALSE}
+salary_byjob <- My_finaldataset %>%
+  group_by(Industry, Gender) %>%
+  summarise(Median_Salary = median(Annual.salary, na.rm = TRUE),
+            Count=n())
+```
+
+#### Bar Chart Showing the Median Salary by Industry and Gender
+
+```{r, echo=FALSE}
+ggplot(salary_byjob, aes(x = Industry, y = Median_Salary, fill = Gender)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(x = "Industry",
+       y = "Median Salary") +
+  theme_minimal()+
+  geom_text(aes(label = Count), position = position_dodge(width = 0.9), vjust = -0) +
+  scale_y_continuous(labels = scales::comma)+
+  coord_flip()+
+   theme(legend.position = "bottom")
+```
+
+This graph shows which career industry makes the most money, and what each person's gender is. The Public Health category only had two respondents, and is misleading to base conclusions off of. Overall, the Computing and Tech respondents have the highest median salaries.
+
+#### Bar Chart Showing the Median Salary by Industry, Gender, and Region
+
+```{r, echo=FALSE}
+#i had to create a new table in order to create the graph
+Job_Gen_Reg <- My_finaldataset%>%
+  group_by(Industry, Gender, Region)%>%
+  summarise(Median_Salary=median(Annual.salary, na.rm=TRUE),
+  Count=n())
+
+ggplot(Job_Gen_Reg, aes(x = Industry, y = Median_Salary, fill = Gender)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(x = "Industry",
+       y = "Median Salary") +
+  facet_wrap(~Region)+
+  theme_minimal() +
+   theme(axis.text.x = element_text(size = 5))+
+  coord_flip()+
+  scale_y_continuous(labels = scales::comma)+
+   theme(legend.position = "bottom")
+```
+
+This chart shows the median salary for each gender in their region, based on what industry they work in.
+
+#### Box Plot Showing Salary Distribution by Industry
+
+```{r, echo=FALSE}
+ggplot(My_finaldataset, aes(x = Industry, y = Annual.salary)) +
+  geom_boxplot() +
+  labs(x = "Industry",
+       y = "Salary") +
+  theme_minimal() +
+  scale_y_continuous(labels = scales::comma)+
+  coord_flip()
+```
+
+These box plots show the salary distributions earned within each industry. It can be seen that the Computing/Tech category has the highest overall salary. However, some outliers are present.
+
+#### Box Plots of Salary Distribution by Gender and Industry
+
+```{r, echo=FALSE}
+ggplot(My_finaldataset, aes(x =Industry, y = Annual.salary, fill = Gender)) +
+  geom_boxplot() +
+  labs(x = "Education Level",
+       y = "Salary") +
+  theme_minimal() +
+  scale_y_continuous(labels = scales::comma) +
+  scale_fill_brewer(palette = "Set3")+
+  coord_flip()+
+   theme(legend.position = "bottom")
+
+
+```
+
+These box plots demonstrate which gender earns the most money, and what career field they fall into.
+
+### Demographic Map:
+
+This choropleth map shows which states have the highest and lowest median salaries. The population per state ranges from 11 to 833, and this graph depicts that California has the highest median salary.
+
+```{r, include=FALSE}
+MainStates <- map_data("state")
+
+mainstates <- MainStates %>%
+  rename(State = region) %>%
+  mutate(State = toupper(State))
+ggplot() + 
+  geom_polygon( data=MainStates, aes(x=long, y=lat, group=group),
+                color="black", fill="lightblue" )
+```
+
+```{r, echo=FALSE}
+state_salary <- My_finaldataset %>%
+  group_by(State) %>%
+  summarise(Median_Salary = median(Annual.salary, na.rm = TRUE),
+            Count=n())
+
+Gen_Ed_Reg <- My_finaldataset %>%
+  mutate(region = tolower(Region))
+
+state_salary$State <- toupper(state_salary$State)
+
+Job_Gen_Reg <- inner_join(state_salary, mainstates, by = "State")
+
+ggplot() + 
+  geom_polygon(data = Job_Gen_Reg, 
+               aes(x = long, y = lat, group = group, fill = Median_Salary), 
+               color = "white", linewidth = 0.2) +
+  labs(title = "Median Salary by State",
+       subtitle = "(For this Specific Sample)",
+       fill = "Median Salary",
+       caption = "Source: Ask A Manager 2021 Salary Survey") +
+  theme_minimal()
+```
+
+## Concluding:
+
+The results from this survey can NOT be reflected back onto the entire population. However, based on this sample, it can be seen that Computer/Data Scientists have the largest income, followed by people working for the Government. Out of those careers, the West region seems to be the place with the highest incomes, but also the highest cost of living. A gender pay gap cannot be concluded from this singular survey, due to disproportionate sample sizes and mild response bias. However, this research can be utilized in future studies. A more representative sample is required to accurately study the correlation between gender and salary.
